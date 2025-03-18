@@ -13,7 +13,7 @@ def get_bert_optim(network, lr, weight_decay):
             no_decay_params.append(p)
         
     if hasattr(network, "sigma_matrix") and network.sigma_matrix.requires_grad:
-        print("✅ Adding sigma_matrix to SGD optimizer.")  # ✅ 이제 출력되어야 함
+        print("✅ Adding sigma_matrix to SGD optimizer.")  
         params.append(network.sigma_matrix)
 
     optimizer_grouped_parameters = [
@@ -37,7 +37,7 @@ def get_sgd_optim(network, lr, weight_decay):
 
     params = list(network.parameters())  # 기존 파라미터 가져오기
     if hasattr(network, "sigma_matrix") and network.sigma_matrix.requires_grad:
-        print("✅ Adding sigma_matrix to SGD optimizer.")  # ✅ 이제 출력되어야 함
+        print("✅ Adding sigma_matrix to SGD optimizer.")  
         params.append(network.sigma_matrix)
     
     return torch.optim.SGD(
