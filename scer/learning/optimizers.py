@@ -35,7 +35,7 @@ def get_bert_optim(network, lr, weight_decay):
 
 def get_sgd_optim(network, lr, weight_decay):
 
-    params = list(network.parameters())  # 기존 파라미터 가져오기
+    params = list(network.parameters())  
     if hasattr(network, "sigma_matrix") and network.sigma_matrix.requires_grad:
         print("✅ Adding sigma_matrix to SGD optimizer.")  
         params.append(network.sigma_matrix)
