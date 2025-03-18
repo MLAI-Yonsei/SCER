@@ -50,7 +50,7 @@ def _hparams(algorithm, dataset, random_seed):
 
     elif algorithm == "SCER":
         _hparam('scer_eta', 1e-2, lambda r: 10**r.uniform(-3, -1))
-        _hparam('lambda_spurious', 1.0, lambda r: r.uniform(0, 1))  # 추가된 부분
+        _hparam('lambda_spurious', 1.0, lambda r: r.uniform(0, 1))  
         _hparam('lambda_core', 1.0, lambda r: r.uniform(0, 1))
 
     # Dataset-and-algorithm-specific hparam definitions
