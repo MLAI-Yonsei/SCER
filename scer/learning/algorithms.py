@@ -268,9 +268,7 @@ class SCER(ERM):
             group_embeddings_dict[idx_g.item()] = emb.mean(dim=0)
             group_counts[idx_g.item()] += idx_samples.sum().item()
 
-        # 원하는 매핑: G0=(y=0,a=0), G1=(y=0,a=1), G2=(y=1,a=0), G3=(y=1,a=1)
-        #근데 g가 애초에  y * num_attributes + a 로 계산이 된담
-        # 그러면  G0=(y=0,a=0), G1=(y=0,a=1), G2=(y=1,a=0), G3=(y=1,a=1) 이렇게 배정을 딕셔너리 통해서 해주자 
+
         if all(g in group_embeddings_dict for g in [0, 1, 2, 3]):
             G0 = group_embeddings_dict[0]
             G1 = group_embeddings_dict[1]
