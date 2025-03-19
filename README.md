@@ -38,7 +38,7 @@ python -m scer.sweep launch --algorithms SCER --dataset "Your Data" \
 After training, you can collect and summarize the results using the following command:
 
 ```bash
-python -m scer.collect_results --input_dir "Your output path"
+python -m scer.collect_results --input_dir "Your output path" 
 ```
 
 ## Acknowledgements
