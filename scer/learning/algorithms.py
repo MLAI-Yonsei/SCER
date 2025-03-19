@@ -244,7 +244,7 @@ class SCER(ERM):
         # 1. Get embeddings and update sigma_matrix
         batch_embeddings = self.return_feats(x)
         self.sigma_matrix = self.compute_sigma_matrix(batch_embeddings)
-        Sigma_inv = torch.linalg.inv(self.sigma_matrix)  # 역행렬 
+        Sigma_inv = torch.linalg.inv(self.sigma_matrix) 
 
         # 2. Standard classification / DRO steps
         predictions = self.predict(x)
@@ -295,7 +295,7 @@ class SCER(ERM):
             dot_delta0_B = Beta @ delta0_vec.T
             dot_delta0_B = dot_delta0_B /  (delta0_norm *Beta_norm)
             dot_delta_B = Beta @ delta_vec.T
-            dot_delta_B = dot_delta_B / (delta_norm *Beta_norm) #스칼라가 된다 
+            dot_delta_B = dot_delta_B / (delta_norm *Beta_norm) 
 
             spurious_product = delta0_norm * dot_delta0_B
             real_product = delta_norm * dot_delta_B
