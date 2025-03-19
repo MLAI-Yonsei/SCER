@@ -185,7 +185,6 @@ class GroupDRO(ERM):
 
 
 class SCER(ERM):
-    "ver_0308"
     """
         SCER with product-based constraints:
       1) ||Delta_0||_Sigma * (Delta_0)^T B -> 0
