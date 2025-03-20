@@ -312,6 +312,6 @@ class SCER(ERM):
 
 
         total_loss = dro_loss + embedding_loss
-        return total_loss
+        return total_loss #total
 
 
