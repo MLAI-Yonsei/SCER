@@ -125,7 +125,7 @@ class SubpopDataset:
         return len(self.idx)
 
 
-class CMNIST(SubpopDataset): #내가바꿈
+class CMNIST(SubpopDataset): 
     N_STEPS = 5001
     CHECKPOINT_FREQ = 250
     INPUT_SHAPE = (3, 224, 224,)
