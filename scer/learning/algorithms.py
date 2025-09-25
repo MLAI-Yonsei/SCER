@@ -185,17 +185,11 @@ class GroupDRO(ERM):
 
 
 class SCER(ERM):
-    """
-        SCER with product-based constraints:
-      1) ||Delta_0||_Sigma * (Delta_0)^T B -> 0
-      2) ||Delta||_Sigma * (Delta)^T B -> large (>0)
-    """
+
     def __init__(self, data_type, input_shape, num_classes, num_attributes,
                  num_examples, hparams, grp_sizes=None):
-        super(EDRO3, self).__init__(
-            data_type, input_shape, num_classes, num_attributes,
-            num_examples, hparams, grp_sizes
-        )
+        super().__init__(data_type, input_shape, num_classes, num_attributes,
+                         num_examples, hparams, grp_sizes)
         self.register_buffer("q", torch.ones(self.num_classes * self.num_attributes).cuda())
         self.sigma_matrix = None
         self.embedding_loss_before_step = torch.tensor(0.0, device='cuda')
@@ -205,112 +199,97 @@ class SCER(ERM):
         deviations = batch_embeddings - mean_embedding
         covariance_matrix = torch.matmul(deviations.T, deviations) / (batch_embeddings.size(0) - 1)
         num_features = batch_embeddings.shape[1]
-        # Simple regularization
         sigma_matrix = (covariance_matrix / (1e-6 + torch.norm(covariance_matrix)) * 0.1 +
                         torch.eye(num_features).cuda())
         return sigma_matrix
-    @staticmethod
-    def compute_a0(group_counts):
-        """
-        group_counts : 
-        {0: num_samples_in_G0,
-        1: num_samples_in_G1,
-        2: num_samples_in_G2,
-        3: num_samples_in_G3}
-        G0=(y=0,a=0), G1=(y=0,a=1), G2=(y=1,a=0), G3=(y=1,a=1).
-        """
-        total = sum(group_counts.values())
-        
-        # y=1 -> (G2, G3), y=0 -> (G0, G1)
-        label1_count = group_counts.get(2, 0) + group_counts.get(3, 0)
-        label0_count = group_counts.get(0, 0) + group_counts.get(1, 0)
-
-        # p(G=1) = P(y=1) = (G2 + G3) / total
-        pG1 = label1_count / (total + 1e-12)
-        # p(G=0) = P(y=0) = (G0 + G1) / total
-        pG0 = label0_count / (total + 1e-12)
-
-        # p(R=1|G=1) = P(a=1 | y=1) = G3 / (G2 + G3)
-        pR1_givenG1 = group_counts.get(3, 0) / (label1_count )
-        # p(R=0|G=0) = P(a=0 | y=0) = G0 / (G0 + G1)
-        pR0_givenG0 = group_counts.get(0, 0) / (label0_count )
-
-        # a0 = 1/2 [ p(R=1|G=1)*p(G=1) + p(R=0|G=0)*p(G=0) ]
-        a0 = 0.5 * (pR1_givenG1 * pG1 + pR0_givenG0 * pG0)
-        return a0
 
     def _compute_loss(self, i, x, y, a, step):
-        # 1. Get embeddings and update sigma_matrix
+        # 1. Embedding & Sigma
         batch_embeddings = self.return_feats(x)
         self.sigma_matrix = self.compute_sigma_matrix(batch_embeddings)
-        Sigma_inv = torch.linalg.inv(self.sigma_matrix) 
 
-        # 2. Standard classification / DRO steps
+        # 2. Group DRO loss
         predictions = self.predict(x)
         losses = self.loss(predictions, y)
         for idx_g, idx_samples in self.return_groups(y, a):
-            self.q[idx_g] *= (self.hparams["scer_eta"] * losses[idx_samples].mean()).exp().item()
+            self.q[idx_g] *= (self.hparams["Edro_eta"] * losses[idx_samples].mean()).exp().item()
         self.q /= self.q.sum()
         dro_loss = sum(
             self.q[idx_g] * losses[idx_samples].mean()
             for idx_g, idx_samples in self.return_groups(y, a)
         )
 
-        # 3. Group embeddings => define Delta_0 and Delta
+        # 3. Group-wise mean embeddings
         group_embeddings_dict = {}
-        group_counts = {0: 0, 1: 0, 2: 0, 3: 0}
         for idx_g, idx_samples in self.return_groups(y, a):
             if len(idx_samples) == 0:
                 continue
             group_x = x[idx_samples]
-            emb = self.return_feats(group_x)
-            group_embeddings_dict[idx_g.item()] = emb.mean(dim=0)
-            group_counts[idx_g.item()] += idx_samples.sum().item()
+            group_emb = self.return_feats(group_x).mean(dim=0)
+            group_embeddings_dict[idx_g] = group_emb
 
-
-        if all(g in group_embeddings_dict for g in [0, 1, 2, 3]):
-            G0 = group_embeddings_dict[0]
-            G1 = group_embeddings_dict[1]
-            G2 = group_embeddings_dict[2]
-            G3 = group_embeddings_dict[3]
-
-            delta0_vec = 0.5 * (abs(G1 - G0) + abs(G3 - G2))
-            delta_vec = 0.5 * (abs(G2 - G0) + abs(G3 - G1))
-            delta0_vec = delta0_vec / (1e-6 + delta0_vec.norm(p=2))
-            delta_vec = delta_vec / (1e-6 + delta_vec.norm(p=2))
-
-            delta0_norm = torch.sqrt(delta0_vec @ self.sigma_matrix @ delta0_vec)
-            delta_norm = torch.sqrt(delta_vec @ self.sigma_matrix @ delta_vec)
+        # 4. Fill missing groups and define spurious and core directions
+        if len(group_embeddings_dict) > 0:
+            group_embeddings_int = {}
+            for key, value in group_embeddings_dict.items():
+                if isinstance(key, torch.Tensor):
+                    group_embeddings_int[key.item()] = value
+                else:
+                    group_embeddings_int[key] = value
             
-            a0 = self.compute_a0(group_counts)
+            # Get embedding dimension
+            embedding_dim = list(group_embeddings_int.values())[0].shape[0]
+            
+            # Option 1: Fill with zero vectors
+            for g in [0, 1, 2, 3]:
+                if g not in group_embeddings_int:
+                    group_embeddings_int[g] = torch.zeros(embedding_dim).cuda()
+        
+            G0 = group_embeddings_int[0]
+            G1 = group_embeddings_int[1]
+            G2 = group_embeddings_int[2]
+            G3 = group_embeddings_int[3]
 
- 
-            numerator = a0 * (delta_vec @ Sigma_inv @ delta0_vec)
-            denominator = 1.0 + a0 * (delta0_vec @ Sigma_inv @ delta0_vec)
-            Beta = Sigma_inv @ delta_vec - Sigma_inv @ delta0_vec * (numerator / denominator)
-            Beta_norm = torch.sqrt(Beta@ self.sigma_matrix @ Beta) 
+            delta_spur = 0.5 * (abs(G1 - G0) + abs(G3 - G2))
+            delta_core = 0.5 * (abs(G2 - G0) + abs(G3 - G1))
 
+            delta_spur = delta_spur / (1e-6 + delta_spur.norm(p=2))
+            delta_core = delta_core / (1e-6 + delta_core.norm(p=2))
 
-            dot_delta0_B = Beta @ delta0_vec.T
-            dot_delta0_B = dot_delta0_B /  (delta0_norm *Beta_norm)
-            dot_delta_B = Beta @ delta_vec.T
-            dot_delta_B = dot_delta_B / (delta_norm *Beta_norm) 
+            delta_spur_norm = torch.sqrt(delta_spur @ self.sigma_matrix @ delta_spur)
+            delta_core_norm = torch.sqrt(delta_core @ self.sigma_matrix @ delta_core)
 
-            spurious_product = delta0_norm * dot_delta0_B
-            real_product = delta_norm * dot_delta_B
+            # 5. Classifier weights: β* ∈ ℝ^{m × p}
+            B = self.classifier.weight.detach()   # shape: [m, p]
 
-            spurious_loss = abs(spurious_product)
+            spur_corrs = []
+            core_corrs = []
 
-            embedding_loss = (self.hparams["lambda_spurious"] * spurious_loss -
-            self.hparams["lambda_core"] * real_product)
+            for j in range(self.num_classes):
+                beta_j = B[j]  # shape: [p]
+                beta_j_norm = torch.sqrt(beta_j @ self.sigma_matrix @ beta_j)
+
+                corr_spur_j = (beta_j @ delta_spur) / (1e-6 + beta_j_norm * delta_spur_norm)
+                corr_core_j = (beta_j @ delta_core) / (1e-6 + beta_j_norm * delta_core_norm)
+
+                spur_corrs.append(corr_spur_j)
+                core_corrs.append(corr_core_j)
+
+            corr_spur = torch.stack(spur_corrs).mean()
+            corr_core = torch.stack(core_corrs).mean()
+
+            spurious_loss = corr_spur * delta_spur_norm
+            core_loss = -corr_core * delta_core_norm
+         
+            embedding_loss = (
+                self.hparams["Edro_spurious"] * spurious_loss +
+                self.hparams["Edro_real"] * core_loss
+            )
             self.embedding_loss_before_step = embedding_loss.clone().detach().requires_grad_(True)
         else:
             embedding_loss = self.embedding_loss_before_step
 
-
-        self.embedding_loss_before_step = embedding_loss.clone().detach().requires_grad_(True)
-
-
+        self.embedding_loss_before_step = embedding_loss.detach()
         total_loss = dro_loss + embedding_loss
         return total_loss
 
