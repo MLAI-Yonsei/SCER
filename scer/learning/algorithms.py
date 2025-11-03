@@ -291,7 +291,6 @@ class SCER(ERM):
             self.embedding_loss_before_step = embedding_loss.clone().detach().requires_grad_(True)
         else:
             embedding_loss = self.embedding_loss_before_step
-            print("embedding_loss_이전것", embedding_loss)
 
         self.embedding_loss_before_step = embedding_loss.detach()
         total_loss = dro_loss + embedding_loss
