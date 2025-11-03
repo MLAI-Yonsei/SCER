@@ -230,6 +230,7 @@ class SCER(ERM):
 
         # 4. Fill missing groups and define spurious and core directions
         if len(group_embeddings_dict) > 0:
+         
             group_embeddings_int = {}
             for key, value in group_embeddings_dict.items():
                 if isinstance(key, torch.Tensor):
@@ -244,7 +245,8 @@ class SCER(ERM):
             for g in [0, 1, 2, 3]:
                 if g not in group_embeddings_int:
                     group_embeddings_int[g] = torch.zeros(embedding_dim).cuda()
-        
+
+
             G0 = group_embeddings_int[0]
             G1 = group_embeddings_int[1]
             G2 = group_embeddings_int[2]
@@ -280,7 +282,8 @@ class SCER(ERM):
 
             spurious_loss = corr_spur * delta_spur_norm
             core_loss = -corr_core * delta_core_norm
-         
+
+       
             embedding_loss = (
                 self.hparams["Edro_spurious"] * spurious_loss +
                 self.hparams["Edro_real"] * core_loss
@@ -288,9 +291,11 @@ class SCER(ERM):
             self.embedding_loss_before_step = embedding_loss.clone().detach().requires_grad_(True)
         else:
             embedding_loss = self.embedding_loss_before_step
+            print("embedding_loss_이전것", embedding_loss)
 
         self.embedding_loss_before_step = embedding_loss.detach()
         total_loss = dro_loss + embedding_loss
         return total_loss
+
 
 
